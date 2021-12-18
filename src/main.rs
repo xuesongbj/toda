@@ -44,6 +44,7 @@ use jsonrpc::start_server;
 use mount_injector::{MountInjectionGuard, MountInjector};
 use nix::sys::signal::{signal, SigHandler, Signal};
 use nix::unistd::{pipe, read, write};
+use nix::mount::{mount, MsFlags};
 use replacer::{Replacer, UnionReplacer};
 use structopt::StructOpt;
 use tokio::runtime::Runtime;
@@ -72,6 +73,12 @@ fn inject(option: Options, injector_config: Vec<InjectorConfig>) -> Result<Mount
 
     info!("canonicalizing path {}", path.display());
     let path = path.canonicalize()?;
+
+    // 1. Set mount properties.
+    // 2. Mirror mount.
+    const NONE: Option<&'static [u8]> = None;
+    mount(NONE, path.as_path(), NONE, MsFlags::MS_PRIVATE, NONE).unwrap_or_else(|e| panic!("make-private failed: {}", e));
+    mount(Some(path.as_path()), path.as_path(), NONE, MsFlags::MS_BIND, NONE).unwrap_or_else(|e| panic!("mount bind failed: {}", e));
 
     let replacer = if !option.mount_only {
         let mut replacer = UnionReplacer::new();

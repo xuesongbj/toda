@@ -1,9 +1,13 @@
 use std::fs::create_dir_all;
 use std::path::Path;
 
+use tracing::info;
+use retry::delay::Fixed;
 use anyhow::{Context, Result};
-use nix::mount::{mount, MsFlags};
+use retry::{retry, OperationResult};
+use nix::mount::{mount, MsFlags, umount};
 use procfs::process::{self, Process};
+
 
 #[derive(Debug, Clone)]
 pub struct MountsInfo {
@@ -50,6 +54,25 @@ impl MountsInfo {
             target_path.as_ref().display()
         ))?;
 
+        Ok(())
+    }
+
+    pub fn bind_mount<P1: AsRef<Path>, P2: AsRef<Path>>(
+        &self,
+        original_path: P1,
+        target_path: P2,
+    ) -> Result<()> {
+        const NONE: Option<&'static [u8]> = None;
+        mount(Some(original_path.as_ref()), target_path.as_ref(), NONE, MsFlags::MS_BIND, NONE).unwrap_or_else(|e| panic!("mount bind failed: {}", e));
+        retry(Fixed::from_millis(500).take(20), || {
+            if let Err(err) = umount(original_path.as_ref()) {
+                info!("umount returns error: {:?}", err);
+                OperationResult::Retry(err)
+            } else {
+                OperationResult::Ok(())
+            }
+        })?;
+        
         Ok(())
     }
 }

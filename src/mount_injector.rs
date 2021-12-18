@@ -61,7 +61,8 @@ impl MountInjectionGuard {
 
         if mounts.non_root(&original_path)? {
             // TODO: make the parent mount points private before move mount points
-            mounts.move_mount(new_path, original_path)?;
+            mounts.bind_mount(new_path, original_path)?;
+            // mounts.move_mount(new_path, original_path)?;
         } else {
             return Err(anyhow!("inject on a root mount"));
         }
